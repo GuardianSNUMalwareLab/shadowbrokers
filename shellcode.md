@@ -43,9 +43,23 @@ Shellcode 분석
 		* global payload_start: payload_start라는 심볼이 모든 모듈에게 알려짐
 
 ## 매크로 (Macro)
-1.  PROCESS_HASH
+1. PROCESS_HASH SPOOLSV_EXE_HASH (line 35)
+	* SPOOLSV_EXE_HASH로 대체
 
-2. 
+2. MAX_PID (line 36)
+	* 최대 PID 값을 0x10000으로 설정
+
+3. WINDOWS_BUILD (line 37)
+	* 7601로 설정
+
+4. USE_X86
+	* USE_X86이라는 상수 정의
+	* 주석에 따르면 그 의미는 x86 페이로드 사용
+
+5. USE_X64
+	* USE_X64라는 상수 정의
+	* 주석에 따르면 x64 페이로드 사용
+
 
 # 3. 레이블 흐름 (Labels)
 
