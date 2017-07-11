@@ -14,5 +14,6 @@ Shellcode 분석
 * 흐름
 	*
 
+# 4. 참고
 
-
+1. 디렉티브 (directives)
