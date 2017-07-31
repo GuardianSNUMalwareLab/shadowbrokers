@@ -116,9 +116,20 @@ Shellcode 분석
 
 ## x64_kernel_start
 * 목적
+	* 이후 처리를 위한 사전 수행 (레지스터 저장 등)
+* 흐름
+	* rsi, r15, r14, r13, r12, rbx, rbp를 저장
+	* 현재의 스택포인터(rsp)를 베이스포이터(rbp)로 복사
+	* 스택포인터의 마지막 1바이트를 0xFFF0과 and시켜서 ABI(Application Binary Interface, 두 프로그램 모듈 사이의 인터페이스)로 정렬
+	* rsp에서 0x20만큼 뺌
+	* r14에 x64_kernel_start 주소를 저장
+	* x64_find_nt_idt 수행
+
+## x64_find_nt_idt
+* 목적
 	*
 * 흐름
-	*
+	* 
 
 # 4. 참고
 
