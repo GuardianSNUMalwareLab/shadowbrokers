@@ -98,9 +98,27 @@ Shellcode 분석
 
 ## x64_syscall_handler
 * 목적
-	* SYSCALL이 호출되었을 때의 처리
+	* SYSCALL이 호출되었을 때의 처리(이 처리 후 본래 OS의 SYSCALL 처리 루틴으로 점프)
 * 흐름
 	* swapgs를 호출하여 msr 레지스터의 0xC0000102 (IA32_KERNEL_GS_BASE)의 값을 gs 레지스터와 바꿈
+	* rsp의 값(사용자의 rsp 값)을 적절한 위치에 저장
+	* rsp에 커널의 스택 포인터를 저장
+	* 스택에 rax, rbx, rcx, rdx, rsi, rdi, rbp, r8, r9, r10, r11, r12, r13, r14, r15를 저장
+	* 스택에 값 33 (0x2b)를 넣고 사용자의 스택 포인터를 넣는다. 그리고 r11을 넣고 값 51 (0x33)을 넣은 뒤, rcx를 넣는다. r10의 값을 rcx로 옮긴 뒤, rsp의 값을 8만큼 뺀 다음 rbp를 스택에 넣음.
+	* 그 다음 rsp를 0x158만큼 빼고 rsp + 0x80의 주소를 rbp에 넣음
+	* rbx, rdi, rsi를 각각 스택에 저장
+	* rax에 0xffffffffffd00ff8 (이 주소에 원래의 syscall_handler 주소가 있음)를 넣고, eax가 하위 4바이트, edx가 상위 4바이트 값을 가진 뒤 ecx에 0xc0000082 (LSTAR)에 넣고 wrmsr를 호출
+	* sti 명령어로 interrupt flag (IF)를 set하고 x64_kernel_start를 호출
+	* x64_kernel_start가 반환된 후, cli 명령어를 통해 IF를 0으로 만들고 저장된 레지스터들을 복원
+	* 현재의 스택 포인터 값(커널 스택 포인터)을 IA32_KERNEL_GS_BASE를 기준으로 커널 스택 포인터를 넣는 공간에 저장하고 반대로 사용자 공간의 값을 rsp로 가져옴
+	* 그리고나서 swapgs를 통해 본래의 GS 값을 가져옴
+	* 마지막으로 원래의 syscall handler로 점프
+
+## x64_kernel_start
+* 목적
+	*
+* 흐름
+	*
 
 # 4. 참고
 
