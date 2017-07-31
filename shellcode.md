@@ -65,10 +65,41 @@ Shellcode 분석
 
 ## payload_start
 * 목적
+	* 아키텍처를 판별하고 64비트이면 계속 수행
+
+* 흐름
+	* ecx를 0으로 초기화
+	* 0x41을 넣음. (이는 x86 아키텍처에서는 ecx를 1 증가시키는 명령어이고, x86_64에서는 rex prefix에 해당)
+	* loop x64_payload_start를 통해서 아키텍처 확인. 이 명령어는 ecx를 1 감소시킨 뒤, 0이 아니면 뒤의 label로 점프한다. 만약 아키텍처가 x86이면 0이 되므로 점프하지 않으나 x86_64이면 x64_payload_start로 점프하게 된다.
+	* 32비트인 경우, ret 명령어를 통해 반환된다. 즉, 쉘코드가 중지된다.
+	* 64비트인 경우, x64_payload_start를 수행한다.
+
+## x64_payload_start
+* 목적
+	* 상수 BITS를 64로 정의하고 그 다음 수행
+
+* 흐름
+	* 상수 BITS를 64로 정의
+
+## x64_syscall_overwrite
+* 목적
+	* handler의 주소값을 LSTAR MSR에 저장
+
+* 흐름
+	* ecx에 0xc0000082를 대입 (이는 LSTAR MSR에 해당)
+	* rdmsr (LSTAR를 읽음) 읽은 값은 edx에 상위 4바이트가 eax에 하위 4바이트가 저장됨
+	* rbx에 절대값 0xffffffffffd00ff8을 대입
+	* rbx의 4바이트 뒤에 edx 값을 저장하고, rbx 주소에 eax의 값을 저장
+	* x64_syscall_handler의 주소값을 rax에 읽고, rdx에 복사한 뒤, rdx를 4바이트 오른쪽으로 시프트 연산 수행
+	* 위 과정을 통해 x64_syscall_handler의 상위 4바이트 주소값은 edx에, 하위 4바이트 주소값은 eax에 저장됨
+	* wrmsr 명령어를 통해 LSTAR MSG에 기록하고 ret를 통해 반환
+
+## x64_syscall_handler
+* 목적
 	*
 
 * 흐름
-	*
+	* swapgs를 호출하여 msr 레지스터의 0xC0000102 (IA32_KERNEL_GS_BASE)의 값을 gs 레지스터와 바꿈
 
 # 4. 참고
 
