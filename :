@@ -127,21 +127,9 @@ Shellcode 분석
 
 ## x64_find_nt_idt
 * 목적
-	* KPCR(Kernel Processor Control Region)으로부터 IDT(Interrupt Descriptor Table)를 추출 (Thread Environment Block (TEB) 혹은 Thread Information Block (TIB)의 Environment Pointer에 해당)
+	* KPCR(Kernel Processor Control Region)으로부터 IDT(Interrupt Descriptor Table)를 추출
 * 흐름
-	* r15에 gs:0x38인 IDTBase의 주소를 저장
-	* 다시 IDTBase 주소값에 4를 더해서 Interrupt Service Routine (ISR) 주소를 얻음
-	* 위 주소값을 오른쪽으로 12비트 시프트하고 다시 왼쪽으로 시프트하여 하위 12비트를 0으로 만듬
-	* r15의 값에서 0x1000을 빼고, 첫 8바이트를 rsi에 저장
-	* 하위 2바이트와 0x5a4d를 비교 (Portable Executable (PE)가 MZ로 시작하는지 확인)
-	* 만약 MZ가 발견되지 않으면 발견될 때까지 r15에서 0x1000을 빼고 MZ를 찾는다.
-
-## find_threadlistentry_offset
-* 목적
-	* ETHREAD 구조체의 ThreadListEntry 필드의 offset을 발견
-* 흐름
-	* 만약 ETHREAD 구조체가 정적이라면 (ifdef STATIC_ETHREAD_DELTA), 0x420 (ETHREAD_THREADLISTENTRY_OFFSET)을 r12에 저장
-	* 만약 static이 아니라면 PSGETCURRENTPROCESS_HASH (PsGetCurrentProcess의 해시값)를 
+	* 
 
 # 4. 참고
 
