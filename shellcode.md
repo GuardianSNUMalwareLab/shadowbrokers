@@ -141,7 +141,60 @@ Shellcode 분석
 	* ETHREAD 구조체의 ThreadListEntry 필드의 offset을 발견
 * 흐름
 	* 만약 ETHREAD 구조체가 정적이라면 (ifdef STATIC_ETHREAD_DELTA), 0x420 (ETHREAD_THREADLISTENTRY_OFFSET)을 r12에 저장
-	* 만약 static이 아니라면 PSGETCURRENTPROCESS_HASH (PsGetCurrentProcess의 해시값)를 
+	* 만약 static이 아니라면 PSGETCURRENTPROCESS_HASH (PsGetCurrentProcess의 해시값)를 r11d에 저장하고 x64_block_api_direct를 호출
+	* PsGetCurrentProcess 함수를 통해 현재 쓰레드의 프로세스로의 포인터 주소를 eax에 저장
+	* rax를 rsi에 복사하고, 해당 주소값을 EPROCESS_THREADLISTHEAD_BLINK_OFFSET만큼 더해서 PEPROCESS->ThreadListHead를 찾음
+	* KEGETCURRENTTHREAD_HASH를 r11d에 저장하고 x64_block_api_direct를 호출하여 KeGetCurrentThread를 호출하여 rax에 현재 쓰레드에 대한 포인터 값을 가져옴
+	* PEPROCESS->ThreadListHead를 rcx에 저장
+
+## _find_threadlistentry_offset_compare_threads
+* 목적
+	* offset을 찾기위한 과정
+* 흐름
+	* rax에는 현재 쓰레드에 대한 포인터가 있고, rsi에는 ThreadListHead가 있음. 이 둘을 비교하여 rax가 rsi보다 크면 _find_threadlistentry_offset_walk_threads를 호출
+	* 작거나 같은 경우, rdx에 rax + 0x500의 주소값을 저장
+	* rdx와 rsi를 비교해서 rdx가 작으면 _find_threadlistentry_offset_walk_threads를 호출
+	* rdx가 크거나 같다면, 즉 rax <= rsi <= rdx면 _find_threadlistentry_offset_calc_thread_exit를 호출
+
+## _find_threadlistentry_offset_walk_thread
+* 목적
+	* list의 다음을 찾고 while을 수행
+* 흐름
+	* rax > rsi이거나 rdx < rsi인 경우에 호출됨
+	* list의 다음을 rsi에 저장
+	* rsi와 rcx(list head)를 비교하여 만약 다르면 _find_threadlistentry_offset_compare_threads를 반복 수행
+	* 만약 같다면 list에 entry가 더 없다는 뜻이므로, rsi를 r12에 저장
+
+## _find_threadlistentry_offset_calc_thread_exit
+* 목적
+	* entry의 offset을 반환
+* 흐름
+	* rsi값(offset)을 r12에 저장
+
+## x64_find_process_name
+* 목적
+	* 프로세스 이름을 찾음
+* 흐름
+	* ebx를 0으로 초기화
+	* ecx를 0으로 만들고 0x4를 더함
+	* 만약 MAX_PID가 정의되어 있어서 ecx의 값이 MAX_PID와 비교해서 ecx가 더 크거나 같으면 x64_kernel_exit를 호출
+	* 만약 ecx 값이 MAX_PID보다 작으면 (즉, 정상범위라면) r14를 rdx에 저장하고 ecx를 ebx에 저장한 뒤, PsLookupProcessById를 호출
+	* 위 함수는 PID에 대한 포인터 값을 eax에 저장
+	* test eax, eax를 통해서 정상 반환되었는지 확인. eax가 0이면 STATUS_SUCCESS가 되어 loop에서 나감. 만약 INVALID하면 _x64_find_process_name_loop_pid를 반복 수행
+	* 루프에서 나가면 x64_kernel_start를 rcx에 저장
+	* PsGetProcessImageFileName을 수행하여 eax에 실행 파일의 이름을 저장
+	* rax를 rsi에 저장하고 x64_calc_hash를 수행하여 r9d에 저장하고 PROCESS_HASH와 비교 (PROCESS_HASH는 공격자가 설정. 기본은 SPOOLSV_EXE_HASH)
+	* 위와 비교해서 공격자가 원하는 프로세스의 PID를 찾을때까지 _x64_find_process_name_loop_pid를 반복
+
+## x64_attach_process
+* 목적
+	*
+* 흐름
+	*
+
+## x64_block_api_direct
+* 목적
+	* 함수 호출
 
 # 4. 참고
 
