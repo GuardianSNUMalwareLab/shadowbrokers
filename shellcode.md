@@ -188,13 +188,234 @@ Shellcode 분석
 
 ## x64_attach_process
 * 목적
-	*
+	* 현재 쓰레드를 process에 attach함
 * 흐름
-	*
+	* r14가 참조하는 값을 rbx에 저장. r14는 EPROCESS이므로 [r14]는 PCB
+	* r14+16을 r13에 저장. r14+16은 PCB의 ProfileListHead
+	* r13을 rdx에 저장
+	* rbx를 rcx에 저장(rcx:PEPROCESS)
+	* KeStackAttachProcess 함수 실행(argument: PRKPROCESS process, PRKAPC_STATE ApcState). KEPROCESS는 현재 쓰레드를 PEPROCESS가 가리키는 process의 address space에 attach함. 현재 쓰레드가 이미 attach되어 있으면 ApcState에 현재의 APC를 반환
+	* ZwAllocateVirtualMemory를 위한 argument setting
+	* rsp에서 0x20을 뺌(shadow stack 예약)
+	* ZwAllocateVirtualMemory 함수 실행
+	* 함수의 리턴값을 확인하여 0이면 아래로 진행. 0이 아니면 x64_kernel_exit_cleanup 함수 호출.
+
+## x64_memcpy_userland_payload
+* 목적
+	* userland의 payload 복사
+* 흐름
+	* [r14]를 rdi에 저장. rdi는 PCB
+	* userland_start 주소를 rsi에 저장
+	* ecx에 0 저장
+	* userland_payload_size 주소를 cx에 더함
+	* userland의 size를 cx에 더함. cx는 userland size + payload size
+	* esi가 가리키는 곳에 있는 값을 edi로 ecx 갯수만큼 복사(rep movsb:repeat move single byte)
+
+## x64_find_alterable_thread
+* 목적
+	* 
+* 흐름
+	* rbx를 rsi에 저장(rsi = EPROCESS)
+	* rsi에 EPROCESS_THREADLISTHEAD_BLINK_OFFSET을 더함. rsi는 EPROCESS.ThreadListHead.Blink임
+	* rsi를 rcx에 저장(head pointer를 rcx에 저장)
+
+## _x64_find_alertable_thread_loop
+* 목적
+	* loop를 돌며 alertable thread를 찾음
+* 흐름
+	* [rcx]를 rdx에 저장. rdx는 다음 list_entry
+	* rsi와 rcx를 비교. 같으면 x64_kernel_exit_cleanup으로 이동. 아니면 아래로 진행
+	* rdx에서 r12(offset)를 뺌. rdx는 EPROCESS
+	* rcx와 rdx값을 스택에 저장
+	* PsGetThreadTeb 실행. eax에 thread의 teb 포인터 저장
+	* rcx와 rdx값 복구
+	* rax가 0인지 체크(TEB가 NULL인지 확인)
+	* NULL이면 _x64_find_alertable_thread_skip_next로 이동. 아니면 아래로 진행
+	* rax에 TEB.ActivationContextStackPointer를 저장
+	* rax 값을 확인하여 0(NULL)이면 _x64_find_alertable_thread_skip_next로 이동. 아니면 아래로 진행
+???	* rdx에 ETHREAD_ALERTABLE_OFFSET 저장. rdx값 불명(thread의 state를 확인하는 듯)
+	* rdx가 참조하는 값을 eax에 저장
+	* eax의 6번째 최하위 비트를 carry flag에 복사
+	* carry flag가 1이면 _x64_finnd_alertable_thread_found로 이동. 아니면 아래로 진행
+
+## _x64_find_alertable_thread_skip_next
+* 목적
+	* 현재 thread를 skip하고 다음 thread를 찾아 loop을 진행
+* 흐름
+	* [rcx]를 rcx에 저장. rcx는 다음 list_entry
+	* _x64_find_alertable_thread_loop으로 이동
+
+## _x64_find_alertable_thread_found
+* 목적
+	* alertable thread의 pointer를 가져옴
+* 흐름
+	* rdx에서 ETHREAD_ALERTABLE_OFFSET을 뺌. 따라서, rdx는 ETHREAD
+	* rdx를 r12에 저장
+
+## x64_create_apc
+* 목적
+	* alertable thread를 이용해 실행할 apc 생성
+* 흐름
+	* edx에 0 저장
+	* dl에 0x90 더함
+	* ecx에 0 저장
+	* ExAllocatePool 함수 실행. Pool을 생성 후 Allocated Block의 포인터를 리턴
+	* rax(pool을 참조하는 포인터)를 rcx에 저장	
+	* KeInitializeApc의 parameter 설정
+	* KeInitializeApc 함수 실행. apc를 초기화. 이때 InjectionShellCode를 넣음
+	* KeInsertQueueApc의 parameter 설정
+	* KeInsertQueueApc 함수 실행. apc를 queue에 넣음
+
+## x64_kernel_exit_cleanup
+* 목적
+	* kernel mode에서 나가기 전 작업
+* 흐름
+	* r13을 rcx에 넣음(rcx=pApcState)
+	* KeUnstackDetachProcess 실행. current thread를 process의 address space에서 제거 후 기존의 attach state 복원
+	* rbx를 rcx에 넣음(rcx=PEPROCESS)
+	* ObDereferenceObject 실행. EPROCESS의 reference count를 1 감소시키고 retention check
+
+## x64_kernel_exit
+* 목적
+	* kernel mode 탈출
+* 흐름
+	* rbp를 rsp에 저장(stack 고정)
+	* kernel mode 진입 전 스택 상태 복원
+
+## x64_userland_start
+* 목적
+	* userland 시작
+* 흐름
+	* x64_userland_start_thread로 점프
+
+## x64_calc_hash
+* 목적
+	* hash값 계산
+* 흐름
+	* r9에 0 저장
+
+## x64_calc_hash_loop
+* 목적
+	* hash값 계산하는 loop
+* 흐름
+	* eax에 0 저장
+	* si의 byte를 eax에 저장(ASCII function name의 다음 byte를 읽음)
+	* r9d(hash value)를 13bit만큼 오른쪽으로 rotate
+	* al이 'a'인지 비교
+	* al이 작으면 _x64_calc_hash_not_lowercase로 이동. 아니면 아래로 진행
+	* al에서 0x20 뺌(대문자로 바꿈)
+
+## x64_calc_hash_not_lowercase
+* 목적
+	* 대문자로 normalize된 hash값의 처리
+* 흐름
+	* r9d에 eax를 더함(이름의 다음 byte를 더함)
+	* al과 ah 비교
+	* 같지 않으면 _x64_calc_hash_loop로 이동. 아니면 return
+
+## x64_block_find_dll
+* 목적
+	* 원하는 dll을 찾기 위해 PEB에 로드된 모듈 정보를 가져옴
+* 흐름
+	* edx에 0 저장
+	* rdx에 [gs:rdx+96] 저장
+	* rdx에 [rdx+24] 저장. rdx는 PEB->Ldr. Ldr은 프로세스에 로드된 모듈에 대한 정보를 가진 구조체임
+	* rdx에 [rdx+32] 저장. rdx는 InMemoryOrder list. InMemoryOrder list는 메모리에 위치한 모듈 순서를 나타냄
+
+## x64_block_find_dll_next_mod
+* 목적
+	* 리스트를 통해 모듈을 찾아 이름과 길이 불러옴
+* 흐름
+	* rdx에 [rdx]를 저장.  rdx는 다음 모듈이 됨
+	* rsi에 [rdx + 80]을 저장. rsi는 PEB->ProcessParameter.unicodestring을 가리킴
+	* rcx에 [rdx + 74]를 저장. rcx는 string length
+	* r9d에 0 저장
+
+## _x64_block_find_dll_loop_mod_name
+* 목적
+	* 원하는 모듈의 이름의 해시값을 비교하기 위해 대문자로 바꿈
+* 흐름
+	* eax에 0 저장
+	* unicode string의 다음 byte를 읽음
+	* al과 'a'값 비교
+	* al이 작으면 _x64_block_find_dll_not_lowercase로 이동. 아니면 아래로 진행
+	* al에서 0x20 뺌. 대문자로 normalize
+
+## _x64_block_find_dll_not_lowercase
+* 목적
+	* 대문자로 바꾸어 해시값 비교하는 과정
+* 흐름
+	* r9d값을 rotate
+	* r9d에 eax 더함(이름의 다음 byte를 더함)
+	* ecx를 1씩 줄여가며 0인지 체크. 0이 되기 전까지 _x64_block_find_dll_loop_mod_name 반복
+	* r9d와 r11d 비교
+	* 같지 않으면 _x64_block_find_dll_next_mod로 이동. 같으면 아래로 진행
+	* r15에 [rdx+32]를 저장한 후 return. r15에는 dll의 actual VA가 있을 것으로 추정됨
+
 
 ## x64_block_api_direct
 * 목적
 	* 함수 호출
+* 흐름
+	* r15값을 rax에 저장(이 때, r15에 있는 값은 PE 구조체의 가장 첫부분. 즉, IMAGE_DOS_HEADER 구조체)
+	* 기존의 parameter를 스택에 저장
+	* rax값을 rdx에 저장
+	* e_lfanew를 eax에 저장(e_lfanew는 IMAGE_NT_HEADERS의 offset(RVA))
+	* rdx(PE 구조체의 시작 주소)를 rax(offset)에 더함. 따라서 rax는 IMAGE_NT_HEADERS의 주소를 가짐
+	* rax+136의 값(IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->DataDirectory[0]에 있는 IMAGE_EXPORT_DIRECTORY 구조체의 RVA)을 eax에 저장
+	* rdx를 rax에 더한다. 이제 rax는 IMAGE_EXPORT_DIRECTORY 구조체를 가리킴(IMAGE_EXPORT_DIRECTORY는 EAT(Export Address Table)에 대한 정보를 담고 있는 구조체)
+	* 스택에 rax(EAT) 저장
+	* NumberOfNames(이름을 갖는 함수 갯수)를 ecx에 저장
+	* AddressOfNames(함수 이름 주소 배열)을 r8d에 저장(역시 RVA값들이 저장되어 있음)
+	* r8에 rdx를 더함. 이제 r8은 함수 이름 주소를 가짐
+
+## x64_block_api_direct_get_next_func
+* 목적
+	* 함수 이름을 이용한 해시값을 비교하며 원하는 함수를 찾음. 배열의 뒤에서부터 비교.
+* 흐름
+	* rcx를 1 감소
+	* esi에 다음 이름의 주소(RVA)를 넣음.
+	* rsi에 rdx를 더함. 이제 rsi는 다음 이름의 주소를 가짐
+	* x64_calc_hash를 호출하여 해시값 계산
+	* r9d와 r11d 비교
+	* 0이 아니면(다르면) x64_block_api_direct_get_next_func로 돌아가고 0이면(같으면) 밑으로 진행
+
+## x64_block_api_direct_finsih
+* 목적
+	* 원하는 함수의 실제 주소를 찾음
+* 흐름
+	* 스택에서 EAT를 꺼내어 rax에 저장
+	* AddressOfNameOrdinal(ordinal 배열의 주소(RVA))를 r8d에 저장
+	* r8에 rdx를 더함. 이제 r8은 oridnal 배열의 주소
+	* 해당 함수의 이름에 해당하는 ordinal index를 cx에 저장
+	* r8d에 AddressOfFunctions의 RVA를 저장
+	* r8에 rdx를 더함. 이제 r8은 AddressOfFunctions의 주소
+	* cx에 저장했던 ordinal index를 이용하여 원하는 함수의 RVA를 가져와 eax에 저장
+	* rax에 rdx를 더함. 이제 rax는  원하는 함수의 actual VA
+	* 스택에서 원래값을 복원
+	* 복원했던 return address를 다시 스택에 push
+	* rax로 이동(즉, 그 함수를 실행. 이 함수가 실행된 뒤에는 다시 return address가 pop될 것임)
+
+## x64_userland_start_thread
+* 목적
+	* userland의 payload를 실행해 줄 thread를 생성
+* 흐름
+	* 스택에 기존의 데이터 저장
+	* Kernel32.dll를 찾아 r15에 주소 저장
+	* ecx에 0 저장
+	* CreateThread 함수 실행을 위한 parameter 설정
+	* CreateThread 함수 실행. 호출한 process의 VA space에서 실행되는 thread를 생성. 여기서 thread의 start address로 userland_payload의 주소가 들어감. 따라서 원하는 payload를 실행 가능하게 됨
+	* 레지스터 복원 후 return
+	
+## userland_payload_size
+* 목적
+	* payload size 설정
+* 흐름
+	* db 명령어를 이용하여 숫자 그대로 넣는다
+
+## userland_payload
+* 목적
+	* 원하는 동작을 발생시키기 위한 payload를 넣는 장소
 
 # 4. 참고
 
