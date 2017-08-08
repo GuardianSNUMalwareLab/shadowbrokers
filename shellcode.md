@@ -2,6 +2,7 @@ Shellcode 분석
 ==============
 
 # 1. 개요
+![해킹시나리오](https://msdnshared.blob.core.windows.net/media/2017/06/Figure-01.-Infection-cycle-overview.png)
 
 # 2. 상수 정의 (Constant)
 ## 디렉티브 (Directive)
